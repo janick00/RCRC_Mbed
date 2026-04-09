@@ -28,32 +28,80 @@ realtime_thread::~realtime_thread() {}
 // this is the main loop called every Ts with high priority
 void realtime_thread::loop(void)
 {
-    float time{0.0f}, w{0.0f}, y1{0.0f}, y2{0.0f}, u(0.0f), exc(0.0f);
+    // control signal, needs to be persistent within loop
+    float u(0.0f);
+
+    // --- P1, AUFGABE 1.8 ---
+    // excitation signal for frequency response measurement
+    float exc(0.0f);
+
+    // --- P2, AUFGABE 1.4 ---
+    // variables for state feedback controller
+    Matrix<float, 1, 2> K(1.418f, 7.341f);
+    Matrix<float, 2, 1> x(0.0f, 0.0f);
+
+    // --- P2, AUFGABE 1.5 ---
+    // feedforward term for state feedback controller
+    const float V = 9.7594f;
+
+    // --- P2, AUFGABE 2.5 ---
+    // observer and variables for observer
+    observer obsv(m_Ts);
+    Matrix<float, 2, 1> x_hat(0.0f, 0.0f);
 
     while (true) {
         ThisThread::flags_wait_any(m_ThreadFlag);
-        time = 1e-6f * (float)(duration_cast<microseconds>(m_Timer.elapsed_time()).count());
+        const float time = 1e-6f * (float)(duration_cast<microseconds>(m_Timer.elapsed_time()).count());
         // --------------------- THE LOOP ---------------------
 
-        // u = myDataLogger.get_set_value(time); // get set values from the GUI
-        w = myDataLogger.get_set_value(time); // get set values from the GUI
+        float w = myDataLogger.get_set_value(time); // get set values from the GUI
 
-        y1 = m_IO_handler->read_ain1(); // read 1st voltage
-        y2 = m_IO_handler->read_ain2(); // read 2nd voltage
+        const float y1 = m_IO_handler->read_ain1(); // read 1st voltage
+        const float y2 = m_IO_handler->read_ain2(); // read 2nd voltage
 
-        // m_IO_handler->write_aout(u); // write to analog output
+        // m_IO_handler->write_aout(w); // write to analog output
 
-        // myDataLogger.write_to_log(time, u, y1, y2, 0.0f, 0.0f, 0.0f);
+        // // --- P1, AUFGABE 1.11 ---
+        // // log the values of time, set value w, measurements y1 and y2
+        // myDataLogger.write_to_log(time, w, y1, y2, 0.0f, 0.0f, 0.0f);
 
-        // --- P1, AUFGABE 1.12 ---
-        u = 4.0f * (exc + w - y2);    // simple P controller, gain = 4.0f
-        u = saturate(u, -1.0f, 1.0f); // limit the setvalue to +-1
-        m_IO_handler->write_aout(u);  // write to analog output
-        myDataLogger.write_to_log(time, u, y1, y2, w, 0.0f, 0.0f);
-        exc = myGPA.update(exc, y2); // GPA calculates future excitation exc(k+1)
+        // // --- P1, AUFGABE 1.12 ---
+        // // implement a simple P controller with gain = 4.0f
+        // u = 4.0f * (w - y2);          // simple P controller, gain = 4.0f
+        // u = saturate(u, -1.0f, 1.0f); // limit the setvalue to +-1
+        // m_IO_handler->write_aout(u);  // write to analog output
+        // myDataLogger.write_to_log(time, w, y1, y2, u, 0.0f, 0.0f);
 
-        // // --- P1, AUFGABE 1.8 ---
-        // // GPA - do not overwrite exc if you want to excite via the GPA
+        // // --- P2, AUFGABE 1.4 ---
+        // // implement a state feedback controller with state vector x = (y1, y2)^T, gain K
+        // x << y1, y2;                  // combine to vector
+        // u = w - K * x;                // calculate control signal (systems-input)
+        // m_IO_handler->write_aout(u);  // write to analog output
+        // myDataLogger.write_to_log(time, w, y1, y2, u, 0.0f, 0.0f);
+
+        // // --- P2, AUFGABE 1.5 ---
+        // // implement a state feedback controller with state vector x = (y1, y2)^T, gain K and feedforward term V
+        // x << y1, y2;                  // combine to vector
+        // u = V * w - K * x;            // calculate control signal (systems-input)
+        // u = saturate(u, -1.0f, 1.0f); // limit the control signal to +-1
+        // m_IO_handler->write_aout(u);  // write to analog output
+        // myDataLogger.write_to_log(time, w, y1, y2, u, 0.0f, 0.0f);
+
+        // --- P2, AUFGABE 2.5 & 2.6 ---
+        // implement an observer based state feedback controller
+        x_hat = obsv.do_step(u, y2);   // run observer, perform 1 step and get observed values
+        // x << y1, y2;                   // combine to vector
+        // u = V * w - K * x;             // calculate control signal (systems-input)
+        // u = saturate(u, -1.0f, 1.0f);  // limit the setvalue to +-1
+        // m_IO_handler->write_aout(u);   // write to analog output
+        // myDataLogger.write_to_log(time, w, y1, y2, u, 0.0f, 0.0f);
+        u = V * (w + exc) - K * x_hat; // calculate control signal (systems-input)
+        u = saturate(u, -1.0f, 1.0f);  // limit the setvalue to +-1
+        m_IO_handler->write_aout(u);   // write to analog output
+        myDataLogger.write_to_log(time, w, y1, y2, u, x_hat(0), x_hat(1));
+
+        // --- P1, AUFGABE 1.8 ---
+        // GPA - do not overwrite exc if you want to excite via the GPA
         // m_IO_handler->write_aout(exc); // write to analog output
         exc = myGPA.update(exc, y2); // GPA calculates future excitation exc(k+1)
     }

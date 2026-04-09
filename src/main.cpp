@@ -13,7 +13,7 @@
 
 // float Ts = 1.0f / 500.0f;
 // float Ts = 1.0f / 5.0e3f;
-float Ts = 1.0f / 10.0e3f; // 10 kHz, 20 kHz was not working with GPA + UART communication
+float Ts = 1.0f / 10.0e3f;                    // 10 kHz, 20 kHz was not working with GPA + UART communication
 GPA myGPA(1.0f, 1000.0f, 30, 0.1f, 0.2f, Ts); // setup here does not affect the actual used parameters, they are set via
                                               // the UART communication via MATLAB
 DataLogger myDataLogger(1);
@@ -24,9 +24,9 @@ int main()
     IO_handler io_handler;
 
     // Communication
-    BufferedSerial uart_serial(USBTX, USBRX, 115200);                     // leave this blocking!
+    BufferedSerial uart_serial(USBTX, USBRX, 115200);                   // leave this blocking!
     uart_comm_thread_send uart_com_send(&io_handler, &uart_serial, .01f); // send communication thread
-    uart_comm_thread_receive uart_com_receive(&uart_serial, .01f);        // receive communication thread
+    uart_comm_thread_receive uart_com_receive(&uart_serial, .01f);      // receive communication thread
 
     // Real-Time Thread
     realtime_thread rt_thread(&io_handler, Ts);
